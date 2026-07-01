@@ -1,0 +1,3 @@
+com\rafly\service\FolderScanner.class
+com\rafly\service\DocumentLoader.class
+com\rafly\controller\DetectorController.class
