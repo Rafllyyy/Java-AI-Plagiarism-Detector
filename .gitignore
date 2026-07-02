@@ -1,0 +1,30 @@
+# Maven
+target/
+
+# VS Code
+.vscode/
+
+# IntelliJ
+.idea/
+
+# Eclipse
+.settings/
+.project
+.classpath
+
+# Java
+*.class
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (untuk backend AI nanti)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Model AI
+models/

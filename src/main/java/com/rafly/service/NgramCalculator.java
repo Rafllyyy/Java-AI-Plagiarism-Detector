@@ -15,11 +15,11 @@ public class NgramCalculator implements SimilarityCalculator {
     public double calculate(String docA, String docB) {
 
         List<String> gramsA = generateNGrams(
-                preprocessor.preprocessTokens(docA)
+                preprocessor.processToTokens(docA)
         );
 
         List<String> gramsB = generateNGrams(
-                preprocessor.preprocessTokens(docB)
+                preprocessor.processToTokens(docB)
         );
 
         Set<String> setA = new HashSet<>(gramsA);

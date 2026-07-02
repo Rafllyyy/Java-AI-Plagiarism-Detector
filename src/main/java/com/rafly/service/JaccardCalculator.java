@@ -11,8 +11,8 @@ public class JaccardCalculator implements SimilarityCalculator {
     @Override
     public double calculate(String docA, String docB) {
 
-        List<String> tokensA = preprocessor.preprocessTokens(docA);
-        List<String> tokensB = preprocessor.preprocessTokens(docB);
+        List<String> tokensA = preprocessor.processToTokens(docA);
+        List<String> tokensB = preprocessor.processToTokens(docB);
 
         Set<String> setA = new HashSet<>(tokensA);
         Set<String> setB = new HashSet<>(tokensB);

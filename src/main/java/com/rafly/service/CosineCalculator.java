@@ -16,10 +16,10 @@ public class CosineCalculator implements SimilarityCalculator {
     public double calculate(String docA, String docB) {
 
         List<String> tokensA =
-                preprocessor.preprocessTokens(docA);
+                preprocessor.processToTokens(docA);
 
         List<String> tokensB =
-                preprocessor.preprocessTokens(docB);
+                preprocessor.processToTokens(docB);
 
         List<List<String>> corpus = new ArrayList<>();
 

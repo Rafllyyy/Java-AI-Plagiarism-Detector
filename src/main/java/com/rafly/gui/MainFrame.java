@@ -14,6 +14,8 @@ import java.util.Set;
 import com.rafly.controller.DetectorController;
 import com.rafly.model.ComparisonResult;
 import com.rafly.model.HighlightResult;
+import com.rafly.model.HistoryEntry;
+import com.rafly.service.ComparisonHistoryManager;
 import com.rafly.service.DocumentLoader;
 import com.rafly.service.ReportExporter;
 import com.rafly.service.WordHighlighter;
@@ -21,57 +23,59 @@ import com.rafly.service.WordHighlighter;
 public class MainFrame extends JFrame {
 
     // ── Services ─────────────────────────────────────────────────────
-    private final DocumentLoader     loader      = new DocumentLoader();
-    private final DetectorController controller  = new DetectorController();
-    private final WordHighlighter    wordHighlighter = new WordHighlighter();
-    private final ReportExporter     reportExporter  = new ReportExporter();
+    private final DocumentLoader loader = new DocumentLoader();
+    private final DetectorController controller = new DetectorController();
+    private final WordHighlighter wordHighlighter = new WordHighlighter();
+    private final ReportExporter reportExporter = new ReportExporter();
+    private final ComparisonHistoryManager historyManager = new ComparisonHistoryManager();
 
     // ── State ─────────────────────────────────────────────────────────
     private String documentAText = "";
     private String documentBText = "";
 
-    // State untuk export — wajib jadi field, bukan lokal
-    private String              lastAlgorithm  = "";
-    private double              lastSimilarity = 0.0;
+    private String lastAlgorithm = "";
+    private double lastSimilarity = 0.0;
     private List<HighlightResult> lastHighlights = new ArrayList<>();
 
     // ── Komponen GUI ──────────────────────────────────────────────────
     private JTextField txtDocumentA;
     private JTextField txtDocumentB;
-    private JButton    btnBrowseA;
-    private JButton    btnBrowseB;
-    private JButton    btnCompare;
-    private JButton    btnCompareFolder;
-    private JButton    btnExport;
+    private JButton btnBrowseA;
+    private JButton btnBrowseB;
+    private JButton btnCompare;
+    private JButton btnCompareFolder;
+    private JButton btnExport;
 
     private JComboBox<String> cmbAlgorithm;
-    private JLabel            lblSimilarity;
+    private JLabel lblSimilarity;
 
     private JTextPane txtPreviewA;
     private JTextPane txtPreviewB;
 
-    private JTable            tblResult;
+    private JTable tblResult;
     private DefaultTableModel tableModel;
 
-    private static final int COL_FILENAME   = 0;
+    private JTable tblHistory;
+    private DefaultTableModel historyModel;
+
+    private static final int COL_FILENAME = 0;
     private static final int COL_SIMILARITY = 1;
-    private static final int COL_STATUS     = 2;
+    private static final int COL_STATUS = 2;
 
     // ── Constructor ───────────────────────────────────────────────────
     public MainFrame() {
         setTitle("Aplikasi Deteksi Plagiarisme Dokumen");
-        setSize(950, 700);
+        setSize(950, 750);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         initComponents();
         setVisible(true);
     }
 
-    // ── Init ──────────────────────────────────────────────────────────
     private void initComponents() {
         JPanel main = new JPanel(new BorderLayout(10, 10));
         main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        main.add(buildTopPanel(),    BorderLayout.NORTH);
+        main.add(buildTopPanel(), BorderLayout.NORTH);
         main.add(buildCenterPanel(), BorderLayout.CENTER);
         add(main);
 
@@ -80,42 +84,50 @@ public class MainFrame extends JFrame {
         btnCompare.addActionListener(e -> compareDocuments());
         btnCompareFolder.addActionListener(e -> compareFolder());
         btnExport.addActionListener(e -> exportReport());
+
+        refreshHistoryTable();
     }
 
     private JPanel buildTopPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints g = new GridBagConstraints();
         g.insets = new Insets(5, 5, 5, 5);
-        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.fill = GridBagConstraints.HORIZONTAL;
 
-        // Baris 0 — Dokumen A
-        g.gridy = 0; g.gridx = 0;
+        g.gridy = 0;
+        g.gridx = 0;
         panel.add(new JLabel("Dokumen A:"), g);
         txtDocumentA = new JTextField(35);
-        g.gridx = 1; g.weightx = 1.0;
+        g.gridx = 1;
+        g.weightx = 1.0;
         panel.add(txtDocumentA, g);
         btnBrowseA = new JButton("Browse");
-        g.gridx = 2; g.weightx = 0;
+        g.gridx = 2;
+        g.weightx = 0;
         panel.add(btnBrowseA, g);
 
-        // Baris 1 — Dokumen B
-        g.gridy = 1; g.gridx = 0;
+        g.gridy = 1;
+        g.gridx = 0;
         panel.add(new JLabel("Dokumen B:"), g);
         txtDocumentB = new JTextField(35);
-        g.gridx = 1; g.weightx = 1.0;
+        g.gridx = 1;
+        g.weightx = 1.0;
         panel.add(txtDocumentB, g);
         btnBrowseB = new JButton("Browse");
-        g.gridx = 2; g.weightx = 0;
+        g.gridx = 2;
+        g.weightx = 0;
         panel.add(btnBrowseB, g);
 
-        // Baris 2 — Algoritma + tombol
-        g.gridy = 2; g.gridx = 0;
+        g.gridy = 2;
+        g.gridx = 0;
         panel.add(new JLabel("Algoritma:"), g);
-        cmbAlgorithm = new JComboBox<>(new String[]{"Jaccard", "Cosine", "Levenshtein", "N-Gram"});
-        g.gridx = 1; g.weightx = 1.0;
+        cmbAlgorithm = new JComboBox<>(new String[] { "Jaccard", "Cosine", "Levenshtein", "N-Gram" });
+        g.gridx = 1;
+        g.weightx = 1.0;
         panel.add(cmbAlgorithm, g);
         btnCompare = new JButton("Bandingkan");
-        g.gridx = 2; g.weightx = 0;
+        g.gridx = 2;
+        g.weightx = 0;
         panel.add(btnCompare, g);
         btnCompareFolder = new JButton("Bandingkan Folder");
         g.gridx = 3;
@@ -131,23 +143,47 @@ public class MainFrame extends JFrame {
     private JPanel buildCenterPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
 
+        // Label similarity
         lblSimilarity = new JLabel("Similarity : —");
         lblSimilarity.setFont(new Font("Arial", Font.BOLD, 18));
         JPanel resultRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         resultRow.add(lblSimilarity);
         panel.add(resultRow, BorderLayout.NORTH);
 
-        txtPreviewA = new JTextPane(); txtPreviewA.setEditable(false);
-        txtPreviewB = new JTextPane(); txtPreviewB.setEditable(false);
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
+        // Preview side-by-side
+        txtPreviewA = new JTextPane();
+        txtPreviewA.setEditable(false);
+        txtPreviewB = new JTextPane();
+        txtPreviewB.setEditable(false);
+        JSplitPane splitH = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 new JScrollPane(txtPreviewA), new JScrollPane(txtPreviewB));
-        split.setResizeWeight(0.5);
-        split.setDividerLocation(450);
-        panel.add(split, BorderLayout.CENTER);
+        splitH.setResizeWeight(0.5);
+        splitH.setDividerLocation(450);
 
+        // Preview di atas, tabel di bawah — bisa digeser
+        JSplitPane splitV = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                splitH, buildBottomPanel());
+        splitV.setResizeWeight(0.55);
+        splitV.setDividerLocation(280);
+
+        panel.add(splitV, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel buildBottomPanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 1, 0, 4));
+        panel.add(buildBatchTablePanel());
+        panel.add(buildHistoryPanel());
+        return panel;
+    }
+
+    private JScrollPane buildBatchTablePanel() {
         tableModel = new DefaultTableModel(
-                new String[]{"Nama File", "Similarity (%)", "Status"}, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+                new String[] { "Nama File", "Similarity (%)", "Status" }, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return false;
+            }
         };
         tblResult = new JTable(tableModel);
         tblResult.setRowHeight(26);
@@ -156,11 +192,45 @@ public class MainFrame extends JFrame {
         tblResult.getColumnModel().getColumn(COL_STATUS).setPreferredWidth(120);
         tblResult.setDefaultRenderer(Object.class, new BatchTableRenderer());
 
-        JScrollPane tableScroll = new JScrollPane(tblResult);
-        tableScroll.setPreferredSize(new Dimension(900, 180));
-        tableScroll.setBorder(BorderFactory.createTitledBorder("Hasil Batch Comparison"));
-        panel.add(tableScroll, BorderLayout.SOUTH);
+        JScrollPane sp = new JScrollPane(tblResult);
+        sp.setPreferredSize(new Dimension(900, 130));
+        sp.setBorder(BorderFactory.createTitledBorder("Hasil Batch Comparison"));
+        return sp;
+    }
 
+    private JPanel buildHistoryPanel() {
+        historyModel = new DefaultTableModel(
+                new String[] { "Tanggal", "Dokumen A", "Dokumen B", "Algoritma", "Similarity (%)" }, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return false;
+            }
+        };
+        tblHistory = new JTable(historyModel);
+        tblHistory.setRowHeight(24);
+        tblHistory.getColumnModel().getColumn(0).setPreferredWidth(150);
+        tblHistory.getColumnModel().getColumn(1).setPreferredWidth(180);
+        tblHistory.getColumnModel().getColumn(2).setPreferredWidth(180);
+        tblHistory.getColumnModel().getColumn(3).setPreferredWidth(100);
+        tblHistory.getColumnModel().getColumn(4).setPreferredWidth(110);
+
+        JButton btnClear = new JButton("Hapus Riwayat");
+        btnClear.addActionListener(e -> {
+            int ok = JOptionPane.showConfirmDialog(this,
+                    "Hapus semua riwayat?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
+            if (ok == JOptionPane.YES_OPTION) {
+                historyManager.clearAll();
+                refreshHistoryTable();
+            }
+        });
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnRow.add(btnClear);
+
+        JPanel panel = new JPanel(new BorderLayout(4, 4));
+        panel.setBorder(BorderFactory.createTitledBorder("Riwayat Perbandingan"));
+        panel.add(new JScrollPane(tblHistory), BorderLayout.CENTER);
+        panel.add(btnRow, BorderLayout.SOUTH);
         return panel;
     }
 
@@ -170,15 +240,18 @@ public class MainFrame extends JFrame {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter(
                 "Dokumen (*.txt, *.docx, *.pdf)", "txt", "docx", "pdf"));
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
 
         File file = chooser.getSelectedFile();
         field.setText(file.getAbsolutePath());
         try {
             String text = loader.load(file);
             preview.setText(text);
-            if (isDocA) documentAText = text;
-            else        documentBText = text;
+            if (isDocA)
+                documentAText = text;
+            else
+                documentBText = text;
         } catch (IOException ex) {
             showError("Gagal memuat dokumen: " + ex.getMessage());
         }
@@ -196,15 +269,20 @@ public class MainFrame extends JFrame {
         double similarity = controller.compare(algorithm, documentAText, documentBText);
         lblSimilarity.setText(String.format("Similarity : %.2f%%", similarity * 100));
 
-        List<HighlightResult> highlights = controller.getHighlights(documentAText, documentBText);
+        List<HighlightResult> highlights = controller.getHighlights(documentAText, documentBText, algorithm);
         highlightText(txtPreviewA, documentAText, highlights, true);
         highlightText(txtPreviewB, documentBText, highlights, false);
 
-        // Simpan ke field untuk export
-        lastAlgorithm  = algorithm;
+        lastAlgorithm = algorithm;
         lastSimilarity = similarity;
         lastHighlights = highlights;
         btnExport.setEnabled(true);
+
+        // Simpan ke riwayat otomatis
+        String nameA = new File(txtDocumentA.getText()).getName();
+        String nameB = new File(txtDocumentB.getText()).getName();
+        historyManager.add(nameA, nameB, algorithm, similarity);
+        refreshHistoryTable();
     }
 
     private void compareFolder() {
@@ -218,9 +296,10 @@ public class MainFrame extends JFrame {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         chooser.setDialogTitle("Pilih Folder Dokumen Pembanding");
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
 
-        File folder    = chooser.getSelectedFile();
+        File folder = chooser.getSelectedFile();
         String algorithm = cmbAlgorithm.getSelectedItem().toString();
 
         tableModel.setRowCount(0);
@@ -228,16 +307,19 @@ public class MainFrame extends JFrame {
         btnCompareFolder.setEnabled(false);
 
         new SwingWorker<List<ComparisonResult>, Void>() {
-            @Override protected List<ComparisonResult> doInBackground() {
+            @Override
+            protected List<ComparisonResult> doInBackground() {
                 return controller.compareFolder(algorithm, documentAText, folder);
             }
-            @Override protected void done() {
+
+            @Override
+            protected void done() {
                 try {
                     List<ComparisonResult> results = get();
                     tableModel.setRowCount(0);
                     for (ComparisonResult r : results) {
                         double pct = r.getSimilarity() * 100;
-                        tableModel.addRow(new Object[]{
+                        tableModel.addRow(new Object[] {
                                 r.getFileName(),
                                 String.format("%.2f%%", pct),
                                 resolveStatus(pct)
@@ -258,7 +340,8 @@ public class MainFrame extends JFrame {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         chooser.setDialogTitle("Pilih folder penyimpanan laporan");
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
 
         String docAName = new File(txtDocumentA.getText()).getName();
         String docBName = new File(txtDocumentB.getText()).getName();
@@ -277,13 +360,29 @@ public class MainFrame extends JFrame {
         }
     }
 
+    // ── History ───────────────────────────────────────────────────────
+
+    private void refreshHistoryTable() {
+        historyModel.setRowCount(0);
+        for (HistoryEntry e : historyManager.getAll()) {
+            historyModel.addRow(new Object[] {
+                    e.getDate(),
+                    e.getDocAName(),
+                    e.getDocBName(),
+                    e.getAlgorithm(),
+                    String.format("%.2f%%", e.getSimilarity() * 100)
+            });
+        }
+    }
+
     // ── Highlight ─────────────────────────────────────────────────────
 
     private void highlightText(JTextPane pane, String originalText,
-                               List<HighlightResult> highlights, boolean isDocA) {
+            List<HighlightResult> highlights, boolean isDocA) {
         pane.setText(originalText);
         StyledDocument doc = pane.getStyledDocument();
 
+        // Reset semua ke putih
         SimpleAttributeSet normal = new SimpleAttributeSet();
         StyleConstants.setBackground(normal, Color.WHITE);
         doc.setCharacterAttributes(0, doc.getLength(), normal, true);
@@ -291,20 +390,25 @@ public class MainFrame extends JFrame {
         SimpleAttributeSet yellow = new SimpleAttributeSet();
         StyleConstants.setBackground(yellow, Color.YELLOW);
 
-        for (HighlightResult r : highlights) {
-            String sentence = isDocA ? r.getSentenceA() : r.getSentenceB();
-            String other    = isDocA ? r.getSentenceB() : r.getSentenceA();
-            Set<String> common = wordHighlighter.getCommonWords(sentence, other);
-            int sentIdx = originalText.indexOf(sentence);
-            if (sentIdx < 0) continue;
-            for (String word : common) {
-                int idx = sentence.indexOf(word);
-                while (idx >= 0) {
+        // Ambil kata-kata yang sama dari SELURUH kedua dokumen
+        String otherText = isDocA ? documentBText : documentAText;
+        Set<String> commonWords = wordHighlighter.getCommonWords(originalText, otherText);
+
+        // Highlight setiap kemunculan kata tersebut di seluruh teks
+        for (String word : commonWords) {
+            int idx = 0;
+            while ((idx = originalText.indexOf(word, idx)) >= 0) {
+                // Pastikan ini kata utuh (bukan bagian dari kata lain)
+                boolean startOk = (idx == 0) || !Character.isLetter(originalText.charAt(idx - 1));
+                boolean endOk = (idx + word.length() >= originalText.length())
+                        || !Character.isLetter(originalText.charAt(idx + word.length()));
+                if (startOk && endOk) {
                     try {
-                        doc.setCharacterAttributes(sentIdx + idx, word.length(), yellow, false);
-                    } catch (Exception ignored) {}
-                    idx = sentence.indexOf(word, idx + word.length());
+                        doc.setCharacterAttributes(idx, word.length(), yellow, false);
+                    } catch (Exception ignored) {
+                    }
                 }
+                idx += word.length();
             }
         }
     }
@@ -312,8 +416,10 @@ public class MainFrame extends JFrame {
     // ── Helper ────────────────────────────────────────────────────────
 
     private String resolveStatus(double pct) {
-        if (pct >= 80) return "Plagiat";
-        if (pct >= 50) return "Mencurigakan";
+        if (pct >= 80)
+            return "Plagiat";
+        if (pct >= 50)
+            return "Mencurigakan";
         return "Aman";
     }
 
@@ -333,9 +439,15 @@ public class MainFrame extends JFrame {
             if (!isSelected) {
                 String status = (String) tableModel.getValueAt(row, COL_STATUS);
                 switch (status) {
-                    case "Plagiat":      c.setBackground(new Color(255, 180, 180)); break;
-                    case "Mencurigakan": c.setBackground(new Color(255, 235, 150)); break;
-                    default:             c.setBackground(new Color(200, 240, 200)); break;
+                    case "Plagiat":
+                        c.setBackground(new Color(255, 180, 180));
+                        break;
+                    case "Mencurigakan":
+                        c.setBackground(new Color(255, 235, 150));
+                        break;
+                    default:
+                        c.setBackground(new Color(200, 240, 200));
+                        break;
                 }
                 c.setForeground(Color.BLACK);
             }

@@ -7,8 +7,8 @@ public class LevenshteinCalculator implements SimilarityCalculator {
     @Override
     public double calculate(String docA, String docB) {
 
-        docA = preprocessor.preprocess(docA);
-        docB = preprocessor.preprocess(docB);
+        docA = preprocessor.process(docA);
+        docB = preprocessor.process(docB);
 
         int distance = levenshteinDistance(docA, docB);
 
