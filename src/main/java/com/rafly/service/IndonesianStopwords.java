@@ -1,60 +1,117 @@
 package com.rafly.service;
 
-import java.util.Set;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.util.HashSet;
-import java.util.Arrays;
+import java.util.Set;
 
 /**
- * Menyimpan daftar stopword Bahasa Indonesia.
- * Tanggung jawab tunggal: hanya menyediakan kumpulan kata yang tidak bermakna
- * secara semantik dan sebaiknya diabaikan saat analisis teks.
+ * Stopword Bahasa Indonesia.
+ * Sumber: PySastrawi (https://github.com/har07/PySastrawi) — MIT License.
+ * Di-load dari GitHub saat startup; fallback ke daftar minimal jika offline.
  */
 public class IndonesianStopwords {
 
-    private static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
-        // Kata ganti
-        "saya", "aku", "kamu", "anda", "kita", "kami", "mereka", "dia", "ia",
-        "nya", "ku", "mu",
-        // Kata penunjuk
-        "ini", "itu", "sini", "sana", "situ",
-        // Kata sambung
-        "dan", "atau", "tetapi", "namun", "sedangkan", "melainkan", "bahwa",
-        "karena", "sebab", "sehingga", "agar", "supaya", "jika", "kalau",
-        "bila", "ketika", "saat", "sejak", "sampai", "hingga", "setelah",
-        "sebelum", "selama", "meskipun", "walaupun", "meski", "walau",
-        // Kata depan / preposisi
-        "di", "ke", "dari", "pada", "untuk", "dengan", "oleh", "tentang",
-        "terhadap", "dalam", "antara", "bagi", "demi", "per", "tanpa",
-        // Kata keterangan umum
-        "sudah", "telah", "sedang", "akan", "belum", "tidak", "bukan",
-        "juga", "pun", "hanya", "saja", "bahkan", "justru", "malah",
-        "selalu", "kadang", "sering", "jarang", "mungkin", "pasti",
-        "tentu", "memang", "masih", "lagi", "lebih", "sangat", "cukup",
-        "terlalu", "agak", "hampir", "sekitar", "kira", "kiranya",
-        // Kata tanya
-        "apa", "siapa", "kapan", "dimana", "bagaimana", "mengapa", "kenapa",
-        "berapa", "mana",
-        // Kata bilangan & urutan
-        "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan",
-        "sembilan", "sepuluh", "pertama", "kedua", "ketiga",
-        // Lain-lain
-        "ada", "adalah", "merupakan", "yaitu", "yakni", "seperti", "sebagai",
-        "tersebut", "hal", "cara", "jenis", "semua", "setiap", "berbagai",
-        "beberapa", "banyak", "sedikit", "seluruh", "masing", "antara",
-        "lain", "lainnya", "dll", "dsb", "dst", "vs", "yang", "yg"
-    ));
+    private static final String SOURCE_URL = "https://raw.githubusercontent.com/har07/PySastrawi/master/" +
+            "src/Sastrawi/StopWordRemover/StopWordRemoverFactory.py";
+
+    private static Set<String> STOPWORDS = null;
+
+    // ── Fallback jika tidak ada internet ─────────────────────────────
+    private static final Set<String> FALLBACK = new HashSet<>();
+    static {
+        String[] words = {
+                "yang", "dan", "di", "ke", "dari", "ini", "itu", "dengan", "untuk", "pada",
+                "adalah", "atau", "juga", "tidak", "dalam", "oleh", "sebagai", "karena",
+                "akan", "ada", "sudah", "saya", "anda", "kita", "mereka", "dia", "kami",
+                "tetapi", "namun", "sehingga", "agar", "jika", "kalau", "bila", "ketika",
+                "sejak", "sampai", "hingga", "setelah", "sebelum", "selama", "meskipun",
+                "bahwa", "tentang", "terhadap", "antara", "bagi", "demi", "tanpa", "per",
+                "telah", "sedang", "belum", "bukan", "juga", "pun", "hanya", "saja",
+                "sangat", "cukup", "terlalu", "agak", "hampir", "sekitar", "mungkin",
+                "selalu", "kadang", "sering", "jarang", "pasti", "tentu", "memang", "masih"
+        };
+        for (String w : words)
+            FALLBACK.add(w);
+    }
 
     private IndonesianStopwords() {
-        // utility class — tidak perlu diinstansiasi
     }
 
-    /** Mengembalikan true jika kata termasuk stopword. */
+    // ── Load stopword dari PySastrawi ─────────────────────────────────
+
+    private static synchronized Set<String> getStopwords() {
+        if (STOPWORDS != null)
+            return STOPWORDS;
+
+        STOPWORDS = new HashSet<>();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) URI.create(SOURCE_URL).toURL().openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+            if (conn.getResponseCode() == 200) {
+                try (BufferedReader br = new BufferedReader(
+                        new InputStreamReader(conn.getInputStream()))) {
+
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    boolean inList = false;
+                    while ((line = br.readLine()) != null) {
+                        if (line.contains("return ["))
+                            inList = true;
+                        if (inList) {
+                            sb.append(line);
+                            if (line.contains("]"))
+                                break;
+                        }
+                    }
+
+                    // Parse kata dari string Python list
+                    String raw = sb.toString();
+                    int i = 0;
+                    while (i < raw.length()) {
+                        int start = raw.indexOf('\'', i);
+                        if (start < 0)
+                            break;
+                        int end = raw.indexOf('\'', start + 1);
+                        if (end < 0)
+                            break;
+                        String word = raw.substring(start + 1, end).trim();
+                        if (!word.isEmpty() && word.matches("[a-zA-Z\\-]+")) {
+                            STOPWORDS.add(word.toLowerCase());
+                        }
+                        i = end + 1;
+                    }
+                }
+            }
+
+            if (STOPWORDS.isEmpty()) {
+                System.out.println("[Stopwords] Gagal load dari GitHub, pakai fallback.");
+                STOPWORDS = new HashSet<>(FALLBACK);
+            } else {
+                System.out.println("[Stopwords] Loaded " + STOPWORDS.size()
+                        + " kata dari PySastrawi.");
+            }
+
+        } catch (Exception e) {
+            System.out.println("[Stopwords] Offline, pakai fallback: " + e.getMessage());
+            STOPWORDS = new HashSet<>(FALLBACK);
+        }
+
+        return STOPWORDS;
+    }
+
+    // ── Public API ────────────────────────────────────────────────────
+
     public static boolean isStopword(String word) {
-        return STOPWORDS.contains(word.toLowerCase());
+        return getStopwords().contains(word.toLowerCase());
     }
 
-    /** Mengembalikan salinan Set stopword (read-only intent). */
     public static Set<String> getAll() {
-        return new HashSet<>(STOPWORDS);
+        return new HashSet<>(getStopwords());
     }
 }

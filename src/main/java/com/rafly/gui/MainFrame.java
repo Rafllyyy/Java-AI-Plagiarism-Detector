@@ -45,6 +45,7 @@ public class MainFrame extends JFrame {
     private JButton btnCompare;
     private JButton btnCompareFolder;
     private JButton btnExport;
+    private JLabel lblAIStatus;
 
     private JComboBox<String> cmbAlgorithm;
     private JLabel lblSimilarity;
@@ -84,8 +85,38 @@ public class MainFrame extends JFrame {
         btnCompare.addActionListener(e -> compareDocuments());
         btnCompareFolder.addActionListener(e -> compareFolder());
         btnExport.addActionListener(e -> exportReport());
+        cmbAlgorithm.addActionListener(e -> {
+            if ("AI (Semantic)".equals(cmbAlgorithm.getSelectedItem())) {
+                checkAIStatus();
+            }
+        });
 
         refreshHistoryTable();
+        checkAIStatus();
+    }
+
+    private void checkAIStatus() {
+        new SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() {
+                return controller.isAIAvailable();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    boolean available = get();
+                    if (available) {
+                        lblAIStatus.setText("⬤ AI Online");
+                        lblAIStatus.setForeground(new Color(0, 150, 0));
+                    } else {
+                        lblAIStatus.setText("⬤ AI Offline");
+                        lblAIStatus.setForeground(Color.GRAY);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }.execute();
     }
 
     private JPanel buildTopPanel() {
@@ -121,7 +152,9 @@ public class MainFrame extends JFrame {
         g.gridy = 2;
         g.gridx = 0;
         panel.add(new JLabel("Algoritma:"), g);
-        cmbAlgorithm = new JComboBox<>(new String[] { "Jaccard", "Cosine", "Levenshtein", "N-Gram" });
+        cmbAlgorithm = new JComboBox<>(new String[] {
+                "Jaccard", "Cosine", "Levenshtein", "N-Gram", "AI (Semantic)"
+        });
         g.gridx = 1;
         g.weightx = 1.0;
         panel.add(cmbAlgorithm, g);
@@ -136,6 +169,11 @@ public class MainFrame extends JFrame {
         btnExport.setEnabled(false);
         g.gridx = 4;
         panel.add(btnExport, g);
+        lblAIStatus = new JLabel("⬤ AI Offline");
+        lblAIStatus.setForeground(Color.GRAY);
+        lblAIStatus.setFont(new Font("Arial", Font.PLAIN, 11));
+        g.gridx = 5;
+        panel.add(lblAIStatus, g);
 
         return panel;
     }
@@ -266,7 +304,13 @@ public class MainFrame extends JFrame {
         }
 
         String algorithm = cmbAlgorithm.getSelectedItem().toString();
-        double similarity = controller.compare(algorithm, documentAText, documentBText);
+        double similarity;
+        try {
+            similarity = controller.compare(algorithm, documentAText, documentBText);
+        } catch (Exception ex) {
+            showError(ex.getMessage());
+            return;
+        }
         lblSimilarity.setText(String.format("Similarity : %.2f%%", similarity * 100));
 
         List<HighlightResult> highlights = controller.getHighlights(documentAText, documentBText, algorithm);
